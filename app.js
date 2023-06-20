@@ -11,6 +11,14 @@ var statusCheckRouter = require('./routes/statusCheck');
 
 var app = express();
 
+const cors = require('cors');
+
+// CORP Policy autorisation
+app.use(cors());
+
+// The file in this repertory can be retrieved directly via an URL.
+app.use('/screenshots', express.static(path.join(__dirname, 'screenshots')));
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'pug');
