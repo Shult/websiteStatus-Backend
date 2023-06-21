@@ -3,9 +3,37 @@ const router = express.Router();
 const axios = require('axios');
 const puppeteer = require('puppeteer');
 const dns = require('dns');
+const winston = require('winston');
+const DailyRotateFile = require('winston-daily-rotate-file');
+const moment = require('moment');
 
+// Logger configuration
+const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
+const filename = `logs/precheck-${timestamp}`;
+
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.simple(),
+    transports: [
+        //new winston.transports.File({ filename: 'logs/precheck.log' }),
+        new DailyRotateFile({
+            filename: filename,
+            datePattern: 'YYYY-MM-DD',
+            hourPattern: 'HH',
+            minutePattern: 'mm',
+            secondPattern: 'ss',
+            maxSize: '2000m',
+            maxFiles: '14d',
+        }),
+        new winston.transports.Console()
+    ]
+});
 
 router.post('/checkStatus', async (req, res) => {
+
+    logger.info('Starting precheck...');
+    logger.info('Performing website verification...');
+
     // Ensures that URLs have been sent in the request body
     if (!req.body.urls) {
         return res.status(400).json({ message: 'URLs not provided' });
@@ -39,6 +67,7 @@ router.post('/checkStatus', async (req, res) => {
 
                 console.log( url+", status: 'up', responseTime: "+responseTime/1000+", screen: OK")
                 if(addssl){
+                    logger.info("id: "+ index + 1+", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
                     return {
                         id: index + 1,
                         url,
@@ -48,6 +77,7 @@ router.post('/checkStatus', async (req, res) => {
                         screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`
                     };
                 } else {
+                    logger.info("id: "+ index + 1+", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
                     return {
                         id: index + 1,
                         url,
@@ -60,6 +90,7 @@ router.post('/checkStatus', async (req, res) => {
             })
             .catch(error => {
                 const responseTime = Date.now() - start; // Calculate the response time
+                logger.info("id: "+ index + 1+", url: "+url+", status: down,"+" responseTime: "+ responseTime/1000);
                 return {
                     id: index + 1,
                     url, status: 'down',
@@ -87,6 +118,7 @@ router.post('/checkStatus', async (req, res) => {
 
     // Sends results in response
     res.json(results);
+    logger.info('End precheck...');
 });
 
 router.get('/checkStatus', function(req, res, next) {
