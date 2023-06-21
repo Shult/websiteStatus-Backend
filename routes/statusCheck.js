@@ -22,7 +22,7 @@ const logger = winston.createLogger({
             hourPattern: 'HH',
             minutePattern: 'mm',
             secondPattern: 'ss',
-            maxSize: '2000m',
+            maxSize: '200000m',
             maxFiles: '14d',
         }),
         new winston.transports.Console()
@@ -67,7 +67,7 @@ router.post('/checkStatus', async (req, res) => {
 
                 console.log( url+", status: 'up', responseTime: "+responseTime/1000+", screen: OK")
                 if(addssl){
-                    logger.info("id: "+ index + 1+", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
+                    logger.info("id: "+ (index+1) +", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
                     return {
                         id: index + 1,
                         url,
@@ -77,7 +77,7 @@ router.post('/checkStatus', async (req, res) => {
                         screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`
                     };
                 } else {
-                    logger.info("id: "+ index + 1+", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
+                    logger.info("id: "+ (index+1) +", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
                     return {
                         id: index + 1,
                         url,
@@ -90,7 +90,7 @@ router.post('/checkStatus', async (req, res) => {
             })
             .catch(error => {
                 const responseTime = Date.now() - start; // Calculate the response time
-                logger.info("id: "+ index + 1+", url: "+url+", status: down,"+" responseTime: "+ responseTime/1000);
+                logger.info("id: "+ (index+1) +", url: "+url+", status: down,"+" responseTime: "+ responseTime/1000);
                 return {
                     id: index + 1,
                     url, status: 'down',
