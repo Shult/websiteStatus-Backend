@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const puppeteer = require('puppeteer');
+const dns = require('dns');
 
 
 router.post('/checkStatus', async (req, res) => {
@@ -13,6 +14,7 @@ router.post('/checkStatus', async (req, res) => {
     const urls = req.body.urls;
     // Creates an array of promises that sends a GET request to each URL
     const requests = urls.map((url, index) => {
+
         let addssl = false;
         // Add "http://" if the user forgot to put it.
         if (!/^https?:\/\//i.test(url)) {
@@ -20,6 +22,11 @@ router.post('/checkStatus', async (req, res) => {
             addssl = true;
             console.log("addssl")
         }
+        // const addssl = checkSSL(url);
+        //
+        // if (addssl === null) {
+        //     console.log("addSSL NULL")
+        // }
 
         const start = Date.now(); // Record the start time
 
@@ -59,6 +66,21 @@ router.post('/checkStatus', async (req, res) => {
                     responseTime: responseTime/1000 };
             });
     });
+
+    // async function checkSSL(url) {
+    //     console.log("Check URL");
+    //     return new Promise((resolve, reject) => {
+    //         dns.resolve4(url, (err, addresses) => {
+    //             if (err || addresses.length === 0) {
+    //                 console.log("ERROR");
+    //                 resolve(null);
+    //             } else {
+    //                 console.log("OK");
+    //                 resolve(true);
+    //             }
+    //         });
+    //     });
+    // }
 
     // Wait until all the promises are resolved
     const results = await Promise.all(requests);
