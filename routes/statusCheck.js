@@ -12,11 +12,13 @@ router.post('/checkStatus', async (req, res) => {
 
     const urls = req.body.urls;
     // Creates an array of promises that sends a GET request to each URL
-    const requests = urls.map(url => {
-
+    const requests = urls.map((url, index) => {
+        let addssl = false;
         // Add "http://" if the user forgot to put it.
         if (!/^https?:\/\//i.test(url)) {
-            url = 'http://' + url;
+            url = 'https://' + url;
+            addssl = true;
+            console.log("addssl")
         }
 
         const start = Date.now(); // Record the start time
@@ -28,11 +30,33 @@ router.post('/checkStatus', async (req, res) => {
                 // If the website is up: Take a screenshot of it
                 screenshot(url);
 
-                return { url, status: 'up', responseTime: responseTime/1000, screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png` };
+                console.log( url+", status: 'up', responseTime: "+responseTime/1000+", screen: OK")
+                if(addssl){
+                    return {
+                        id: index + 1,
+                        url,
+                        status: 'up',
+                        responseTime: responseTime/1000,
+                        addssl: true,
+                        screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`
+                    };
+                } else {
+                    return {
+                        id: index + 1,
+                        url,
+                        status: 'up',
+                        responseTime: responseTime/1000,
+                        addssl: false,
+                        screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`
+                    };
+                }
             })
             .catch(error => {
                 const responseTime = Date.now() - start; // Calculate the response time
-                return { url, status: 'down', responseTime: responseTime/1000 };
+                return {
+                    id: index + 1,
+                    url, status: 'down',
+                    responseTime: responseTime/1000 };
             });
     });
 
@@ -59,6 +83,8 @@ async function screenshot(url) {
 
     // Prenez un screenshot et enregistrez-le dans le répertoire spécifié
     await page.screenshot({ path: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png` });
+
+    await page.title();
 
     // Fermez le navigateur
     await browser.close();
