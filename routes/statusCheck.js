@@ -30,7 +30,6 @@ const logger = winston.createLogger({
 });
 
 router.post('/checkStatus', async (req, res) => {
-
     logger.info('Starting precheck...');
     logger.info('Performing website verification...');
 
@@ -74,7 +73,7 @@ router.post('/checkStatus', async (req, res) => {
                         status: 'up',
                         responseTime: responseTime/1000,
                         addssl: true,
-                        screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`
+                        screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
                     };
                 } else {
                     logger.info("id: "+ (index+1) +", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
@@ -84,7 +83,7 @@ router.post('/checkStatus', async (req, res) => {
                         status: 'up',
                         responseTime: responseTime/1000,
                         addssl: false,
-                        screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`
+                        screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
                     };
                 }
             })
@@ -94,7 +93,8 @@ router.post('/checkStatus', async (req, res) => {
                 return {
                     id: index + 1,
                     url, status: 'down',
-                    responseTime: responseTime/1000 };
+                    responseTime: responseTime/1000,
+                };
             });
     });
 
@@ -115,10 +115,17 @@ router.post('/checkStatus', async (req, res) => {
 
     // Wait until all the promises are resolved
     const results = await Promise.all(requests);
+    logger.info('End precheck...');
+
+    const data = {
+        results,
+        logs: filename
+    };
 
     // Sends results in response
-    res.json(results);
-    logger.info('End precheck...');
+    //res.json(results);
+    res.json(data);
+
 });
 
 router.get('/checkStatus', function(req, res, next) {
@@ -126,21 +133,21 @@ router.get('/checkStatus', function(req, res, next) {
 });
 
 async function screenshot(url) {
-    // Lancez un nouveau navigateur
+    // Launch a new browser
     const browser = await puppeteer.launch();
 
-    // Ouvrez une nouvelle page
+    // Open a new page
     const page = await browser.newPage();
 
-    // Accédez à l'URL spécifiée
+    // Access the specified URL
     await page.goto(url);
 
-    // Prenez un screenshot et enregistrez-le dans le répertoire spécifié
+    // Take a screenshot and save it in the specified directory
     await page.screenshot({ path: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png` });
 
     await page.title();
 
-    // Fermez le navigateur
+    // Close browser
     await browser.close();
 }
 
