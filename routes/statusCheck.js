@@ -6,16 +6,18 @@ const dns = require('dns');
 const winston = require('winston');
 const DailyRotateFile = require('winston-daily-rotate-file');
 const moment = require('moment');
+const path = require('path');
 
 // Logger configuration
 const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
 const filename = `logs/precheck-${timestamp}`;
 
+
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.simple(),
     transports: [
-        //new winston.transports.File({ filename: 'logs/precheck.log' }),
+        new winston.transports.File({ filename: 'logs/precheck.log' }),
         new DailyRotateFile({
             filename: filename,
             datePattern: 'YYYY-MM-DD',
@@ -28,6 +30,8 @@ const logger = winston.createLogger({
         new winston.transports.Console()
     ]
 });
+
+
 
 router.post('/checkStatus', async (req, res) => {
     logger.info('Starting precheck...');
@@ -116,12 +120,12 @@ router.post('/checkStatus', async (req, res) => {
     // Wait until all the promises are resolved
     const results = await Promise.all(requests);
     logger.info('End precheck...');
-
+    const timestamp = moment().format('YYYY-MM-DD');
     const data = {
         results,
-        logs: filename
+        logs: filename+"."+timestamp
     };
-
+    console.log(filename);
     // Sends results in response
     //res.json(results);
     res.json(data);
@@ -150,5 +154,19 @@ async function screenshot(url) {
     // Close browser
     await browser.close();
 }
+
+router.get('/download/logs/:filename', (req, res) => {
+    console.log("Reach");
+    const logsFileName = req.params.filename;
+    const logsFilePath = path.join(__dirname, '../logs', logsFileName); // Assurez-vous que le chemin d'accès aux journaux est correct
+
+    res.download(logsFilePath, logsFileName, (err) => {
+        if (err) {
+            // Gérez l'erreur de téléchargement
+            console.error('Error downloading logs:', err);
+            res.status(500).json({ message: 'Error downloading logs' });
+        }
+    });
+});
 
 module.exports = router;
