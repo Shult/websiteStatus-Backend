@@ -11,8 +11,17 @@ const path = require('path');
 // Logger configuration
 const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
 const filename = `logs/precheck-${timestamp}`;
+let attempts = 0;
 
+// Stats
+let totalServers = 0;
+let upServers = 0;
+let downServers = 0;
+let upRatio = 0;
+let totalResponseTime = 0;
+let requestStartTime = 0;
 
+// Logger
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.simple(),
@@ -31,8 +40,6 @@ const logger = winston.createLogger({
     ]
 });
 
-
-
 router.post('/checkStatus', async (req, res) => {
     logger.info('Starting precheck...');
     logger.info('Performing website verification...');
@@ -46,115 +53,127 @@ router.post('/checkStatus', async (req, res) => {
     // Creates an array of promises that sends a GET request to each URL
     const requests = urls.map((url, index) => {
 
-        let addssl = false;
         // Add "http://" if the user forgot to put it.
+        let addssl = false;
         if (!/^https?:\/\//i.test(url)) {
             url = 'https://' + url;
             addssl = true;
-            console.log("addssl")
         }
-        // const addssl = checkSSL(url);
-        //
-        // if (addssl === null) {
-        //     console.log("addSSL NULL")
-        // }
 
-        const start = Date.now(); // Record the start time
+        // Record the start time
+        const start = Date.now();
 
+        // Check the status of the website
         return axios.get(url)
             .then(response => {
-                const responseTime = Date.now() - start; // Calculate the response time
+                // Calculate the response time
+                const responseTime = Date.now() - start;
 
                 // If the website is up: Take a screenshot of it
                 screenshot(url);
 
-                console.log( url+", status: 'up', responseTime: "+responseTime/1000+", screen: OK")
-                if(addssl){
-                    logger.info("id: "+ (index+1) +", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
+                // If we have add https://
+                if (addssl) {
+                    logger.info("id: " + (index + 1) + ", url: " + url + ", status: up," + " responseTime: " + responseTime / 1000 + ", addssl: " + addssl + ", screen: screenshots/" + url + ".png");
                     return {
                         id: index + 1,
                         url,
                         status: 'up',
-                        responseTime: responseTime/1000,
+                        responseTime: responseTime / 1000,
                         addssl: true,
                         screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
                     };
                 } else {
-                    logger.info("id: "+ (index+1) +", url: "+url+", status: up,"+" responseTime: "+ responseTime/1000+", addssl: "+addssl+", screen: screenshots/"+url+".png");
+                    logger.info("id: " + (index + 1) + ", url: " + url + ", status: up," + " responseTime: " + responseTime / 1000 + ", addssl: " + addssl + ", screen: screenshots/" + url + ".png");
                     return {
                         id: index + 1,
                         url,
                         status: 'up',
-                        responseTime: responseTime/1000,
+                        responseTime: responseTime / 1000,
                         addssl: false,
                         screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
                     };
                 }
             })
             .catch(error => {
-                const responseTime = Date.now() - start; // Calculate the response time
-                logger.info("id: "+ (index+1) +", url: "+url+", status: down,"+" responseTime: "+ responseTime/1000);
+                console.log("This site ("+url+") is down.");
                 return {
                     id: index + 1,
-                    url, status: 'down',
-                    responseTime: responseTime/1000,
+                    url,
+                    status: "down",
+                    //responseTime: responseTime/1000,
+                    addssl: false,
+                    //retrynb: attempts,
+                    screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
                 };
             });
     });
 
-    // async function checkSSL(url) {
-    //     console.log("Check URL");
-    //     return new Promise((resolve, reject) => {
-    //         dns.resolve4(url, (err, addresses) => {
-    //             if (err || addresses.length === 0) {
-    //                 console.log("ERROR");
-    //                 resolve(null);
-    //             } else {
-    //                 console.log("OK");
-    //                 resolve(true);
-    //             }
-    //         });
-    //     });
-    // }
-
     // Wait until all the promises are resolved
     const results = await Promise.all(requests);
+    
     logger.info('End precheck...');
     const timestamp = moment().format('YYYY-MM-DD');
     const data = {
         results,
         logs: filename+"."+timestamp
     };
-    console.log(filename);
-    // Sends results in response
-    //res.json(results);
-    res.json(data);
 
+    // Stats update
+    totalServers = results.length;
+    upServers = results.filter(site => site.status === 'up').length;
+    downServers = results.filter(site => site.status === 'down').length;
+    upRatio = upServers / totalServers;
+    totalResponseTime = results.reduce((total, site) => total + site.responseTime, 0);
+    const requestEndTime = Date.now();
+    const responseTimeStats = (requestEndTime - requestStartTime) / 1000; // Convertissez en secondes
+
+    // Stats print
+    console.log('Verification statistics:');
+    console.log(`Total number of sites: ${totalServers}`);
+    console.log(`Number of UP sites: ${upServers}`);
+    console.log(`Number of DOWN sites: ${downServers}`);
+    console.log(`Pourcentage of UP sites: ${upRatio*100}%`);
+    console.log(`Average response time: ${totalResponseTime/totalServers} seconds`);
+    console.log(`Temps de réponse : ${responseTimeStats} secondes`);
+
+    // Sends results in response
+    res.json(data);
 });
 
+// Get request for "checkStatus", not really usefull
 router.get('/checkStatus', function(req, res, next) {
     res.render('index', { title: 'checkStatus: try to do a post request to have a better result.' });
 });
 
+// Take a screenshot of the website
 async function screenshot(url) {
+    let timeout = 60000*20; // 60000 ms = 1 min
+
     // Launch a new browser
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+        timeout: timeout, // Définir le délai d'attente à 60 secondes (60000 ms)
+        //headless: "new"   // If on day you have an issues with the website, it's maybe because the version of puppeteer, I'm using the old one because it's seems to be faster, but it may be not supported anymore in the future
+    });
 
     // Open a new page
-    const page = await browser.newPage();
+    const page = await browser.newPage({
+        timeout: timeout, // Définir le délai d'attente à 60 secondes (60000 ms)
+    });
 
     // Access the specified URL
-    await page.goto(url);
+    await page.goto(url, {timeout: timeout});
 
     // Take a screenshot and save it in the specified directory
     await page.screenshot({ path: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png` });
 
-    await page.title();
+    //await page.title();
 
     // Close browser
     await browser.close();
 }
 
+// Download logs
 router.get('/download/logs/:filename', (req, res) => {
     console.log("Reach");
     const logsFileName = req.params.filename;
@@ -162,7 +181,7 @@ router.get('/download/logs/:filename', (req, res) => {
 
     res.download(logsFilePath, logsFileName, (err) => {
         if (err) {
-            // Gérez l'erreur de téléchargement
+            // Manage download error
             console.error('Error downloading logs:', err);
             res.status(500).json({ message: 'Error downloading logs' });
         }
