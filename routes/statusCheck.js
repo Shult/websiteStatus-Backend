@@ -97,12 +97,14 @@ router.post('/checkStatus', async (req, res) => {
             })
             .catch(error => {
                 console.log("This site ("+url+") is down.");
+                const responseTime = Date.now() - start;
+                logger.info("id: " + (index + 1) + ", url: " + url + ", status: down," + " responseTime: "+responseTime+", addssl: " + addssl);
                 return {
                     id: index + 1,
                     url,
                     status: "down",
-                    //responseTime: responseTime/1000,
-                    addssl: false,
+                    responseTime: responseTime / 1000,
+                    addssl: addssl,
                     //retrynb: attempts,
                     screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
                 };
