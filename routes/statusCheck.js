@@ -9,8 +9,14 @@ const moment = require('moment');
 const path = require('path');
 
 // Logger configuration
-const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
-const filename = `logs/precheck-${timestamp}`;
+// const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
+// const filename = `logs/precheck-${timestamp}`;
+
+
+
+
+//const filename = `logs/precheck-${timestamp}.log`;
+
 let attempts = 0;
 
 // Stats
@@ -21,26 +27,22 @@ let upRatio = 0;
 let totalResponseTime = 0;
 let requestStartTime = 0;
 
-// Logger
-const logger = winston.createLogger({
-    level: 'info',
-    format: winston.format.simple(),
-    transports: [
-        new winston.transports.File({ filename: 'logs/precheck.log' }),
-        new DailyRotateFile({
-            filename: filename,
-            datePattern: 'YYYY-MM-DD',
-            hourPattern: 'HH',
-            minutePattern: 'mm',
-            secondPattern: 'ss',
-            maxSize: '200000m',
-            maxFiles: '14d',
-        }),
-        new winston.transports.Console()
-    ]
-});
+
 
 router.post('/checkStatus', async (req, res) => {
+
+    let timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');;
+    let filename;
+    // Logger
+    const logger = winston.createLogger({
+        level: 'info',
+        format: winston.format.simple(),
+        transports: [
+            new winston.transports.File({ filename: 'logs/precheck-'+timestamp+'.log'}),
+            new winston.transports.Console()
+        ]
+    });
+
     logger.info('Starting precheck...');
     logger.info('Performing website verification...');
 
@@ -114,11 +116,14 @@ router.post('/checkStatus', async (req, res) => {
     // Wait until all the promises are resolved
     const results = await Promise.all(requests);
     
-    logger.info('End precheck...');
-    const timestamp = moment().format('YYYY-MM-DD');
+    // logger.info('End precheck...');
+    //const timestamp = moment().format('YYYY-MM-DD');
+    filename = `logs/precheck-${timestamp}`;
+
     const data = {
         results,
-        logs: filename+"."+timestamp
+        //logs: filename+"."+timestamp
+        logs: filename+".log"
     };
 
     // Stats update
@@ -179,7 +184,7 @@ async function screenshot(url) {
 router.get('/download/logs/:filename', (req, res) => {
     console.log("Reach");
     const logsFileName = req.params.filename;
-    const logsFilePath = path.join(__dirname, '../logs', logsFileName); // Assurez-vous que le chemin d'accès aux journaux est correct
+    const logsFilePath = path.join(__dirname, '../logs', logsFileName); // Make sure the log path is correct
 
     res.download(logsFilePath, logsFileName, (err) => {
         if (err) {
