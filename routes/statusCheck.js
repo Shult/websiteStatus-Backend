@@ -7,6 +7,8 @@ const winston = require('winston');
 const DailyRotateFile = require('winston-daily-rotate-file');
 const moment = require('moment');
 const path = require('path');
+const xlsx = require('xlsx');
+const fs = require('fs');
 
 let timeout = 60000*60; // 60000 ms = 1 min
 
@@ -20,6 +22,7 @@ let upRatio = 0;
 let totalResponseTime = 0;
 let requestStartTime = 0;
 
+let excelFileName = 'exemple.xlsx';
 
 
 router.post('/checkStatus', async (req, res) => {
@@ -35,6 +38,26 @@ router.post('/checkStatus', async (req, res) => {
             new winston.transports.Console()
         ]
     });
+
+
+    // Créer un nouveau classeur
+    let wb = xlsx.utils.book_new();
+
+    // Définir les données
+    let firstRow = [
+        ["URL", "Status"]
+    ];
+
+    // Créer une feuille de calcul à partir des données
+    let ws = xlsx.utils.aoa_to_sheet(firstRow);
+
+    // Ajouter la feuille de calcul au classeur
+    xlsx.utils.book_append_sheet(wb, ws, "Feuille1");
+
+    // Écrire le classeur dans un fichier
+    xlsx.writeFile(wb, excelFileName);
+
+
 
     // Ensures that URLs have been sent in the request body
     if (!req.body.urls) {
@@ -66,6 +89,7 @@ router.post('/checkStatus', async (req, res) => {
 
                 // If we have add https://
                 if (addssl) {
+                    addToExcelFile(url, "up");
                     logger.info("id: " + (index + 1) + ", url: " + url + ", status: up," + " responseTime: " + responseTime / 1000 + ", addssl: " + addssl + ", screen: screenshots/" + url + ".png");
                     return {
                         id: index + 1,
@@ -76,6 +100,7 @@ router.post('/checkStatus', async (req, res) => {
                         screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
                     };
                 } else {
+                    addToExcelFile(url, "up");
                     logger.info("id: " + (index + 1) + ", url: " + url + ", status: up," + " responseTime: " + responseTime / 1000 + ", addssl: " + addssl + ", screen: screenshots/" + url + ".png");
                     return {
                         id: index + 1,
@@ -90,6 +115,7 @@ router.post('/checkStatus', async (req, res) => {
             .catch(error => {
                 console.log("This site ("+url+") is down.");
                 const responseTime = Date.now() - start;
+                addToExcelFile(url, "down");
                 logger.info("id: " + (index + 1) + ", url: " + url + ", status: down," + " responseTime: "+responseTime+", addssl: " + addssl);
                 return {
                     id: index + 1,
@@ -130,6 +156,9 @@ router.post('/checkStatus', async (req, res) => {
     console.log(`Pourcentage of UP sites: ${upRatio*100}%`);
     console.log(`Average response time: ${totalResponseTime/totalServers} seconds`);
 
+
+    //fs.rename(excelFileName, timestamp);
+
     // Sends results in response
     res.json(data);
 });
@@ -166,6 +195,37 @@ async function screenshot(url) {
     await browser.close();
 }
 
+
+
+function addToExcelFile(url, status){
+    console.log("Add excel file");
+
+    // Read existing workbook
+    let workbook = xlsx.readFile(excelFileName);
+
+    // Get the first workbook sheet
+    let worksheetName = workbook.SheetNames[0];
+    let worksheet = workbook.Sheets[worksheetName];
+
+    // Convert the worksheet into an array of tables
+    let data2 = xlsx.utils.sheet_to_json(worksheet, {header: 1});
+
+    // Find the last row
+    let lastRow = data2.length;
+
+    // Add new data
+    data2.push([url, status]);
+
+    // Convert data into a worksheet
+    let newWorksheet = xlsx.utils.aoa_to_sheet(data2);
+
+    // Replace old worksheet with new one
+    workbook.Sheets[worksheetName] = newWorksheet;
+
+    // Write workbook to file
+    xlsx.writeFile(workbook, excelFileName);
+}
+
 // Download logs
 router.get('/download/logs/:filename', (req, res) => {
     console.log("Reach");
@@ -179,6 +239,26 @@ router.get('/download/logs/:filename', (req, res) => {
     }
 
     res.download(logsFilePath, logsFileName, (err) => {
+        if (err) {
+            // Manage download error
+            console.error('Error downloading logs:', err);
+            res.status(500).json({ message: 'Error downloading logs' });
+        }
+    });
+});
+
+router.get('/download/excel/:filename', (req, res) => {
+    console.log("Reach EXCEL");
+    const excelFileName = req.params.filename+".xlsx";
+    const excelFilePath = path.join(__dirname, '../', excelFileName);
+
+    if(excelFileName){
+        console.log("exist");
+    } else {
+        console.log("Don't exist");
+    }
+
+    res.download(excelFilePath, excelFileName, (err) => {
         if (err) {
             // Manage download error
             console.error('Error downloading logs:', err);
