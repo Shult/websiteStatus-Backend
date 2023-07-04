@@ -8,14 +8,7 @@ const DailyRotateFile = require('winston-daily-rotate-file');
 const moment = require('moment');
 const path = require('path');
 
-// Logger configuration
-// const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
-// const filename = `logs/precheck-${timestamp}`;
-
-
-
-
-//const filename = `logs/precheck-${timestamp}.log`;
+let timeout = 60000*60; // 60000 ms = 1 min
 
 let attempts = 0;
 
@@ -42,9 +35,6 @@ router.post('/checkStatus', async (req, res) => {
             new winston.transports.Console()
         ]
     });
-
-    logger.info('Starting precheck...');
-    logger.info('Performing website verification...');
 
     // Ensures that URLs have been sent in the request body
     if (!req.body.urls) {
@@ -115,14 +105,11 @@ router.post('/checkStatus', async (req, res) => {
 
     // Wait until all the promises are resolved
     const results = await Promise.all(requests);
-    
-    // logger.info('End precheck...');
-    //const timestamp = moment().format('YYYY-MM-DD');
+
     filename = `logs/precheck-${timestamp}`;
 
     const data = {
         results,
-        //logs: filename+"."+timestamp
         logs: filename+".log"
     };
 
@@ -142,7 +129,6 @@ router.post('/checkStatus', async (req, res) => {
     console.log(`Number of DOWN sites: ${downServers}`);
     console.log(`Pourcentage of UP sites: ${upRatio*100}%`);
     console.log(`Average response time: ${totalResponseTime/totalServers} seconds`);
-    console.log(`Temps de réponse : ${responseTimeStats} secondes`);
 
     // Sends results in response
     res.json(data);
@@ -155,7 +141,7 @@ router.get('/checkStatus', function(req, res, next) {
 
 // Take a screenshot of the website
 async function screenshot(url) {
-    let timeout = 60000*20; // 60000 ms = 1 min
+    //let timeout = 60000*20; // 60000 ms = 1 min
 
     // Launch a new browser
     const browser = await puppeteer.launch({
@@ -184,7 +170,13 @@ async function screenshot(url) {
 router.get('/download/logs/:filename', (req, res) => {
     console.log("Reach");
     const logsFileName = req.params.filename;
-    const logsFilePath = path.join(__dirname, '../logs', logsFileName); // Make sure the log path is correct
+    const logsFilePath = path.join(__dirname, '../logs', logsFileName);
+
+    if(logsFileName){
+        console.log("exist");
+    } else {
+        console.log("Don't exist");
+    }
 
     res.download(logsFilePath, logsFileName, (err) => {
         if (err) {
