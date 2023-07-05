@@ -10,6 +10,7 @@ const path = require('path');
 const xlsx = require('xlsx');
 const fs = require('fs');
 
+
 let timeout = 60000*60; // 60000 ms = 1 min
 
 let attempts = 0;
@@ -24,9 +25,7 @@ let requestStartTime = 0;
 
 let excelFileName = 'exemple.xlsx';
 
-
 router.post('/checkStatus', async (req, res) => {
-
     let timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');;
     let filename;
     // Logger
@@ -170,17 +169,16 @@ router.get('/checkStatus', function(req, res, next) {
 
 // Take a screenshot of the website
 async function screenshot(url) {
-    //let timeout = 60000*20; // 60000 ms = 1 min
 
     // Launch a new browser
     const browser = await puppeteer.launch({
-        timeout: timeout, // Définir le délai d'attente à 60 secondes (60000 ms)
-        //headless: "new"   // If on day you have an issues with the website, it's maybe because the version of puppeteer, I'm using the old one because it's seems to be faster, but it may be not supported anymore in the future
+        timeout: timeout,
+        headless: 'new'   // If on day you have an issues with the website, it's maybe because the version of puppeteer, I'm using the old one because it's seems to be faster, but it may be not supported anymore in the future
     });
 
     // Open a new page
     const page = await browser.newPage({
-        timeout: timeout, // Définir le délai d'attente à 60 secondes (60000 ms)
+        timeout: timeout,
     });
 
     // Access the specified URL
@@ -194,8 +192,6 @@ async function screenshot(url) {
     // Close browser
     await browser.close();
 }
-
-
 
 function addToExcelFile(url, status){
     console.log("Add excel file");
