@@ -10,7 +10,6 @@ const path = require('path');
 const xlsx = require('xlsx');
 const fs = require('fs');
 
-
 let timeout = 60000*60; // 60000 ms = 1 min
 
 let attempts = 0;
@@ -39,21 +38,21 @@ router.post('/checkStatus', async (req, res) => {
     });
 
 
-    // Créer un nouveau classeur
+    // Create a new workbook
     let wb = xlsx.utils.book_new();
 
-    // Définir les données
+    // Define data
     let firstRow = [
         ["URL", "Status"]
     ];
 
-    // Créer une feuille de calcul à partir des données
+    // Create a spreadsheet from the data
     let ws = xlsx.utils.aoa_to_sheet(firstRow);
 
-    // Ajouter la feuille de calcul au classeur
+    // Add worksheet to workbook
     xlsx.utils.book_append_sheet(wb, ws, "Feuille1");
 
-    // Écrire le classeur dans un fichier
+    // Write workbook to file
     xlsx.writeFile(wb, excelFileName);
 
 

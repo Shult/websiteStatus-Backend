@@ -20,10 +20,10 @@ app2.get('/compareLogsTest', function(req, res, next) {
     res.render('index', { title: 'compareLogsTest: try to do a post request to have a better result.' });
 });
 
-// // Port d'écoute de votre serveur
-// const port = 3001;
-// app2.listen(port, () => {
-//     console.log(`Server is running on port ${port}`);
-// });
+// Port d'écoute de votre serveur
+const port = 3002;
+app2.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+});
 
 module.exports = app2;
