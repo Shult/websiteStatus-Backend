@@ -23,7 +23,7 @@ app2.get('/compareLogsTest', function(req, res, next) {
 // Port d'écoute de votre serveur
 const port = 3002;
 app2.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+    console.log(`CompareLogs is running on port ${port}`);
 });
 
 module.exports = app2;

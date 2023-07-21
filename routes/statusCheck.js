@@ -1,70 +1,61 @@
+// Constants file for the project
+const Constants = require('../constants');
+
+// Library
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const puppeteer = require('puppeteer');
-const dns = require('dns');
 const winston = require('winston');
 const DailyRotateFile = require('winston-daily-rotate-file');
 const moment = require('moment');
-const path = require('path');
-const xlsx = require('xlsx');
 const fs = require('fs');
 
-let timeout = 60000*60; // 60000 ms = 1 min
+// File
+const browserUtil = require('../utils/browser');
+const excelUtil = require('../utils/excel');
+const loggerUtil = require('../utils/logger');
+const statsUtil = require('../utils/stats');
 
-let attempts = 0;
+// for browser
+let browser= null;
+let page = null;
 
-// Stats
-let totalServers = 0;
-let upServers = 0;
-let downServers = 0;
-let upRatio = 0;
-let totalResponseTime = 0;
-let requestStartTime = 0;
+// Timeout
+let timeout = Constants.VALUE_TIMEOUT; // 60000 ms = 1 min
 
-let excelFileName = 'exemple.xlsx';
-
+// POST Request for checking webSite (Most important part of the website)
 router.post('/checkStatus', async (req, res) => {
-    let timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');;
+    const { browser, page } = await browserUtil.startBrowser(timeout);
+
+    // Get the date and time to have unique file (Logs and screenshots)
+    let timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
     let filename;
-    // Logger
-    const logger = winston.createLogger({
-        level: 'info',
-        format: winston.format.simple(),
-        transports: [
-            new winston.transports.File({ filename: 'logs/precheck-'+timestamp+'.log'}),
-            new winston.transports.Console()
-        ]
-    });
+
+    // Init logger file
+    const logger = loggerUtil.initLogger(timestamp);
+
+    // Init excel file
+    excelUtil.initExcel(timestamp);
 
 
-    // Create a new workbook
-    let wb = xlsx.utils.book_new();
-
-    // Define data
-    let firstRow = [
-        ["URL", "Status"]
-    ];
-
-    // Create a spreadsheet from the data
-    let ws = xlsx.utils.aoa_to_sheet(firstRow);
-
-    // Add worksheet to workbook
-    xlsx.utils.book_append_sheet(wb, ws, "Feuille1");
-
-    // Write workbook to file
-    xlsx.writeFile(wb, excelFileName);
-
-
-
+    // ------------------------------- MAIN FUNCTION: START -------------------------------------------
     // Ensures that URLs have been sent in the request body
     if (!req.body.urls) {
         return res.status(400).json({ message: 'URLs not provided' });
     }
 
+    // Put all urls from the txt file in a variable
     const urls = req.body.urls;
-    // Creates an array of promises that sends a GET request to each URL
-    const requests = urls.map((url, index) => {
+
+    // Init the table for the result
+    let results = [];
+
+    // For each websites do this
+    for(let index = 0; index < urls.length; index++) {
+        console.log("index = "+(index+1)+"/"+urls.length);
+
+        let url = urls[index];
 
         // Add "http://" if the user forgot to put it.
         let addssl = false;
@@ -76,190 +67,132 @@ router.post('/checkStatus', async (req, res) => {
         // Record the start time
         const start = Date.now();
 
-        // Check the status of the website
-        return axios.get(url)
-            .then(response => {
-                // Calculate the response time
-                const responseTime = Date.now() - start;
+        // Path to save screenshot
+        let pathScreen = Constants.LINK_SCREENSHOTS+timestamp;
 
-                // If the website is up: Take a screenshot of it
-                screenshot(url);
+        try {
+            // Check the status of the website
+            const response = await axios.get(url);
 
-                // If we have add https://
-                if (addssl) {
-                    addToExcelFile(url, "up");
-                    logger.info("id: " + (index + 1) + ", url: " + url + ", status: up," + " responseTime: " + responseTime / 1000 + ", addssl: " + addssl + ", screen: screenshots/" + url + ".png");
-                    return {
-                        id: index + 1,
-                        url,
-                        status: 'up',
-                        responseTime: responseTime / 1000,
-                        addssl: true,
-                        screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
-                    };
-                } else {
-                    addToExcelFile(url, "up");
-                    logger.info("id: " + (index + 1) + ", url: " + url + ", status: up," + " responseTime: " + responseTime / 1000 + ", addssl: " + addssl + ", screen: screenshots/" + url + ".png");
-                    return {
-                        id: index + 1,
-                        url,
-                        status: 'up',
-                        responseTime: responseTime / 1000,
-                        addssl: false,
-                        screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
-                    };
-                }
-            })
-            .catch(error => {
-                console.log("This site ("+url+") is down.");
-                const responseTime = Date.now() - start;
-                addToExcelFile(url, "down");
-                logger.info("id: " + (index + 1) + ", url: " + url + ", status: down," + " responseTime: "+responseTime+", addssl: " + addssl);
-                return {
-                    id: index + 1,
-                    url,
-                    status: "down",
-                    responseTime: responseTime / 1000,
-                    addssl: addssl,
-                    //retrynb: attempts,
-                    screen: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png`,
-                };
-            });
-    });
+            // take screenshot and wait for it to finish
+            await screenshot(url, timestamp, browser, page);
+            //await browserUtil.screenshot(url, timestamp, browser, page);
 
-    // Wait until all the promises are resolved
-    const results = await Promise.all(requests);
+            // Calculate the response time
+            const responseTime = Date.now() - start;
 
-    filename = `logs/precheck-${timestamp}`;
+            // Add the data to the excel file
+            excelUtil.addToExcelFile(url, "up");
 
+            // Write log
+            logger.info("id: " + (index + 1) + ", url: " + url + ", status: up," + " responseTime: " + responseTime / 1000 + ", addssl: " + addssl + ", screen: screenshots/" + url + ".png");
+
+            // Result
+            let result = {
+                id: index + 1,
+                url,
+                status: 'up',
+                responseTime: responseTime / 1000,
+                addssl: addssl,
+                screen: pathScreen+"\\"+url.replace(/[:\/\/]/g, "_")+".png"
+            };
+
+            // add result to results array
+            results.push(result);
+
+        } catch (error) {
+            console.log("This site ("+url+") is down.");
+
+            // Calculate the response time
+            const responseTime = Date.now() - start;
+
+            // Add the data to the excel file
+            excelUtil.addToExcelFile(url, "down");
+
+            // Write log
+            logger.info("id: " + (index + 1) + ", url: " + url + ", status: down," + " responseTime: "+responseTime+", addssl: " + addssl);
+
+            // Result
+            let result = {
+                id: index + 1,
+                url,
+                status: "down",
+                responseTime: responseTime / 1000,
+                addssl: addssl,
+                screen: pathScreen+"\\"+url.replace(/[:\/\/]/g, "_")+".png",
+            };
+
+            // add result to results array
+            results.push(result);
+        }
+    }
+// ------------------------------- MAIN FUNCTION: END -------------------------------------------
+
+    // Path of the logs to send
+    filename = timestamp;
+
+    // Get stats
+    let stats = statsUtil.getStats(results);
+
+    // Stop the browser
+    await browserUtil.stopBrowser(browser, page);
+
+    // Response of the API: All the data that we send to the frontend. results contain all the information
     const data = {
         results,
-        logs: filename+".log"
+        logs: filename,
+        nbTotalSites: stats.totalSites,
+        nbUpSites: stats.upSites
     };
-
-    // Stats update
-    totalServers = results.length;
-    upServers = results.filter(site => site.status === 'up').length;
-    downServers = results.filter(site => site.status === 'down').length;
-    upRatio = upServers / totalServers;
-    totalResponseTime = results.reduce((total, site) => total + site.responseTime, 0);
-    const requestEndTime = Date.now();
-    const responseTimeStats = (requestEndTime - requestStartTime) / 1000; // Convertissez en secondes
-
-    // Stats print
-    console.log('Verification statistics:');
-    console.log(`Total number of sites: ${totalServers}`);
-    console.log(`Number of UP sites: ${upServers}`);
-    console.log(`Number of DOWN sites: ${downServers}`);
-    console.log(`Pourcentage of UP sites: ${upRatio*100}%`);
-    console.log(`Average response time: ${totalResponseTime/totalServers} seconds`);
-
-
-    //fs.rename(excelFileName, timestamp);
 
     // Sends results in response
     res.json(data);
 });
 
-// Get request for "checkStatus", not really usefull
-router.get('/checkStatus', function(req, res, next) {
-    res.render('index', { title: 'checkStatus: try to do a post request to have a better result.' });
-});
-
 // Take a screenshot of the website
-async function screenshot(url) {
-
-    // Launch a new browser
-    const browser = await puppeteer.launch({
-        timeout: timeout,
-        headless: 'new'   // If on day you have an issues with the website, it's maybe because the version of puppeteer, I'm using the old one because it's seems to be faster, but it may be not supported anymore in the future
-    });
-
-    // Open a new page
-    const page = await browser.newPage({
-        timeout: timeout,
-    });
-
+async function screenshot(url, timestamp, browser, page) {
     // Access the specified URL
     await page.goto(url, {timeout: timeout});
 
+    // Path for the screenshots
+    let path = Constants.LINK_SCREENSHOTS+timestamp+'\\';
+
+    // Check if the directory already exist (Error handler)
+    fs.access(path, (error) => {
+        if (error) {
+            // Use fs.mkdir to create the directory
+            fs.mkdir(path, { recursive: true }, (error) => {
+                if (error) {
+                    console.error('An error occurred: ', error);
+                } else {
+                    console.log('New directory successfully created.');
+                }
+            });
+        } else {
+            //console.log('Directory already exists.');
+        }
+    });
+
     // Take a screenshot and save it in the specified directory
-    await page.screenshot({ path: `screenshots/${url.replace(/[:\/\/]/g, "_")}.png` });
-
-    //await page.title();
-
-    // Close browser
-    await browser.close();
-}
-
-function addToExcelFile(url, status){
-    console.log("Add excel file");
-
-    // Read existing workbook
-    let workbook = xlsx.readFile(excelFileName);
-
-    // Get the first workbook sheet
-    let worksheetName = workbook.SheetNames[0];
-    let worksheet = workbook.Sheets[worksheetName];
-
-    // Convert the worksheet into an array of tables
-    let data2 = xlsx.utils.sheet_to_json(worksheet, {header: 1});
-
-    // Find the last row
-    let lastRow = data2.length;
-
-    // Add new data
-    data2.push([url, status]);
-
-    // Convert data into a worksheet
-    let newWorksheet = xlsx.utils.aoa_to_sheet(data2);
-
-    // Replace old worksheet with new one
-    workbook.Sheets[worksheetName] = newWorksheet;
-
-    // Write workbook to file
-    xlsx.writeFile(workbook, excelFileName);
+    await page.screenshot({
+        path: path+url.replace(/[:\/\/]/g, "_")+'.png'
+    });
+    console.log("Screenshot taken: "+ url);
 }
 
 // Download logs
 router.get('/download/logs/:filename', (req, res) => {
-    console.log("Reach");
-    const logsFileName = req.params.filename;
-    const logsFilePath = path.join(__dirname, '../logs', logsFileName);
-
-    if(logsFileName){
-        console.log("exist");
-    } else {
-        console.log("Don't exist");
-    }
-
-    res.download(logsFilePath, logsFileName, (err) => {
-        if (err) {
-            // Manage download error
-            console.error('Error downloading logs:', err);
-            res.status(500).json({ message: 'Error downloading logs' });
-        }
-    });
+    loggerUtil.downloadLogs(req.params.filename, res);
 });
 
+// Download Excel file
 router.get('/download/excel/:filename', (req, res) => {
-    console.log("Reach EXCEL");
-    const excelFileName = req.params.filename+".xlsx";
-    const excelFilePath = path.join(__dirname, '../', excelFileName);
+    excelUtil.downloadExcel(req.params.filename, res);
+});
 
-    if(excelFileName){
-        console.log("exist");
-    } else {
-        console.log("Don't exist");
-    }
-
-    res.download(excelFilePath, excelFileName, (err) => {
-        if (err) {
-            // Manage download error
-            console.error('Error downloading logs:', err);
-            res.status(500).json({ message: 'Error downloading logs' });
-        }
-    });
+// ONLY FOR TESTING EASILY THE API: Get request for "checkStatus", not really usefull
+router.get('/checkStatus', function(req, res, next) {
+    res.render('index', { title: 'checkStatus: try to do a post request to have a better result.' });
 });
 
 module.exports = router;

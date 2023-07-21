@@ -6,10 +6,12 @@ var logger = require('morgan');
 
 
 //Routes
+const Constants = require('./constants');
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var statusCheckRouter = require('./routes/statusCheck');
 var compareLogsRouter = require('./routes/compareLogs');
+
 
 var app = express();
 
